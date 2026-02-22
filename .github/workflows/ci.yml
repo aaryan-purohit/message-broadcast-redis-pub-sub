@@ -28,3 +28,32 @@ jobs:
 
       - name: Terraform validate
         run: terraform validate
+
+  go:
+    name: Go Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: setup go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.25
+      
+      - name: Cache go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Go fmt check
+        run: go fmt ./...
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Run Go tests
+        run: go test ./... -v -race
+
