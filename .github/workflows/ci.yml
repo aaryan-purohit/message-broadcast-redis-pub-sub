@@ -20,7 +20,7 @@ jobs:
         with:
           terraform_version: 1.6.6
 
-      - name: Terrafomr fmt
+      - name: Terraform fmt
         run: terraform fmt -check -recursive
 
       - name: Terraform init
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: setup go
+      - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: 1.25
@@ -48,12 +48,44 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum || (echo "go.mod/go.sum not tidy" && exit 1)
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout=5m
+
       - name: Go fmt check
         run: go fmt ./...
 
       - name: Go vet
         run: go vet ./...
 
-      - name: Run Go tests
-        run: go test ./... -v -race
+      - name: Run Go tests with coverage
+        run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: Build subscriber binary
+        run: go build -o dist/subscriber ./cmd/subscriber/main.go
+
+      - name: Build publisher binary
+        run: go build -o dist/publisher ./cmd/publisher/main.go
+
+      - name: Upload binaries as artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: dist/
+          retention-days: 5
 

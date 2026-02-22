@@ -13,7 +13,7 @@ import (
 type Subscriber struct {
 	client    *redis.Client
 	channel   string
-	processor processor.Processor
+	processor *processor.Processor
 	logger    *slog.Logger
 }
 
@@ -21,7 +21,7 @@ func NewSubscriber(client *redis.Client, channel string, processor *processor.Pr
 	return &Subscriber{
 		client:    client,
 		channel:   channel,
-		processor: *processor,
+		processor: processor,
 		logger:    logger,
 	}
 }
@@ -43,7 +43,9 @@ func (s *Subscriber) Start(ctx context.Context) error {
 			s.logger.Error("invalid message", "error", err)
 			continue
 		}
-		s.processor.Submit(event)
+		if err := s.processor.Submit(event); err != nil {
+			s.logger.Warn("failed to submit event to processor", "event_id", event.ID, "error", err)
+		}
 	}
 
 }
