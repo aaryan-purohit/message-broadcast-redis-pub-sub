@@ -83,7 +83,7 @@ jobs:
         run: go build -o dist/publisher ./cmd/publisher/main.go
 
       - name: Upload binaries as artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: binaries
           path: dist/
