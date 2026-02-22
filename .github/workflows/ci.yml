@@ -1,0 +1,30 @@
+name: CI - Redis Pub Sub Project
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+  
+    defaults:
+      run:
+        working-directory: iac
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+
+      - name: Terrafomr fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
