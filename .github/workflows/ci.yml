@@ -9,6 +9,11 @@ on:
 jobs:
   terraform:
     runs-on: ubuntu-latest
+  
+    defaults:
+      run:
+        working-directory: iac
+
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
