@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"log/slog"
 
@@ -41,8 +43,20 @@ func main() {
 
 	sub := redisclient.NewSubscriber(rdb, channel, p, logger)
 
+	// Setup signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		logger.Info("shutdown signal received")
+		p.Stop()
+		os.Exit(0)
+	}()
+
 	if err := sub.Start(ctx); err != nil {
 		logger.Error("subscriber stopped", "error", err)
+		p.Stop()
 	}
 
 }
