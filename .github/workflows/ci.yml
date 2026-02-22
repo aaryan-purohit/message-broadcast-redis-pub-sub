@@ -68,12 +68,8 @@ jobs:
       - name: Run Go tests with coverage
         run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage.out
-          flags: unittests
-          name: codecov-umbrella
+      - name: Display coverage summary
+        run: go tool cover -func=coverage.out | tail -20
 
       - name: Build subscriber binary
         run: go build -o dist/subscriber ./cmd/subscriber/main.go
