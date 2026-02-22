@@ -16,7 +16,7 @@ In this design:
 The system is implemented in **Go**, with:
 - Clean separation between transport, routing, and business logic
 - Structured event messages
-- Asynchronous processing with worker pools (Phase 5)
+- Asynchronous processing with worker pools
 
 Redis infrastructure is provisioned using **Terraform (IaC)** for consistent setup.
 
