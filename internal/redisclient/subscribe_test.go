@@ -45,7 +45,7 @@ func (f *fakeHandler) Handle(ctx context.Context, event events.Message) error {
 func newFakeProcessor(t *testing.T, handler *fakeHandler) *processor.Processor {
 	t.Helper()
 
-	logger := testLogger()
+	logger := TestLogger()
 
 	d := dispatcher.New(logger)
 	d.Register("demo.message", handler)
@@ -82,7 +82,7 @@ func waitForSubscription(
 func TestSubscriber_Start_ReceivesMessage(t *testing.T) {
 	t.Parallel()
 
-	mr := setupRedis(t)
+	mr := SetupRedis(t)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
@@ -94,7 +94,7 @@ func TestSubscriber_Start_ReceivesMessage(t *testing.T) {
 	defer proc.Stop()
 
 	channel := "test.channel"
-	sub := NewSubscriber(rdb, channel, proc, testLogger())
+	sub := NewSubscriber(rdb, channel, proc, TestLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -160,7 +160,7 @@ func TestSubscriber_Start_ReceivesMessage(t *testing.T) {
 func TestSubscriber_Start_ContextCancel(t *testing.T) {
 	t.Parallel()
 
-	mr := setupRedis(t)
+	mr := SetupRedis(t)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
@@ -171,7 +171,7 @@ func TestSubscriber_Start_ContextCancel(t *testing.T) {
 	proc := newFakeProcessor(t, handler)
 	defer proc.Stop()
 
-	sub := NewSubscriber(rdb, "test.channel", proc, testLogger())
+	sub := NewSubscriber(rdb, "test.channel", proc, TestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
@@ -194,7 +194,7 @@ func TestSubscriber_Start_ContextCancel(t *testing.T) {
 func TestSubscriber_IgnoresInvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	mr := setupRedis(t)
+	mr := SetupRedis(t)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
@@ -206,7 +206,7 @@ func TestSubscriber_IgnoresInvalidJSON(t *testing.T) {
 	defer proc.Stop()
 
 	channel := "test.channel"
-	sub := NewSubscriber(rdb, channel, proc, testLogger())
+	sub := NewSubscriber(rdb, channel, proc, TestLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -230,7 +230,7 @@ func TestSubscriber_IgnoresInvalidJSON(t *testing.T) {
 func TestSubscriber_IgnoresOtherChannels(t *testing.T) {
 	t.Parallel()
 
-	mr := setupRedis(t)
+	mr := SetupRedis(t)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
@@ -241,7 +241,7 @@ func TestSubscriber_IgnoresOtherChannels(t *testing.T) {
 	proc := newFakeProcessor(t, handler)
 	defer proc.Stop()
 
-	sub := NewSubscriber(rdb, "allowed.channel", proc, testLogger())
+	sub := NewSubscriber(rdb, "allowed.channel", proc, TestLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
