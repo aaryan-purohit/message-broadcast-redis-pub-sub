@@ -14,6 +14,10 @@ import (
 	"main/internal/processor"
 )
 
+//
+// ---------- Test Helpers ----------
+//
+
 // fakeHandler captures submitted events deterministically
 type fakeHandler struct {
 	mu     sync.Mutex
@@ -53,6 +57,36 @@ func newFakeProcessor(t *testing.T, handler *fakeHandler) *processor.Processor {
 	return processor.New(d, logger, 1, 10)
 }
 
+// waitForSubscription blocks until Redis confirms a subscriber
+func waitForSubscription(
+	t *testing.T,
+	rdb *redis.Client,
+	channel string,
+) {
+	t.Helper()
+
+	ctx := context.Background()
+	timeout := time.After(1 * time.Second)
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("timeout waiting for subscription to channel %q", channel)
+		case <-tick.C:
+			res := rdb.PubSubNumSub(ctx, channel)
+			if n := res.Val()[channel]; n > 0 {
+				return
+			}
+		}
+	}
+}
+
+//
+// ---------- Tests ----------
+//
+
 func TestSubscriber_Start_ReceivesMessage(t *testing.T) {
 	t.Parallel()
 
@@ -76,6 +110,9 @@ func TestSubscriber_Start_ReceivesMessage(t *testing.T) {
 	go func() {
 		_ = sub.Start(ctx)
 	}()
+
+	// 🔑 IMPORTANT: wait until subscription is active
+	waitForSubscription(t, rdb, channel)
 
 	event := events.Message{
 		ID:     "test-id",
@@ -117,9 +154,10 @@ func TestSubscriber_Start_ReceivesMessage(t *testing.T) {
 	if received.Type != "demo.message" {
 		t.Fatalf("unexpected type: %s", received.Type)
 	}
+
 	payload, ok := received.Payload.(map[string]any)
 	if !ok {
-		t.Fatalf("payload has unexpected type: %T", received.Payload)
+		t.Fatalf("unexpected payload type: %T", received.Payload)
 	}
 
 	if payload["text"] != "hello" {
@@ -175,7 +213,8 @@ func TestSubscriber_IgnoresInvalidJSON(t *testing.T) {
 	proc := newFakeProcessor(t, handler)
 	defer proc.Stop()
 
-	sub := NewSubscriber(rdb, "test.channel", proc, testLogger())
+	channel := "test.channel"
+	sub := NewSubscriber(rdb, channel, proc, testLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -184,7 +223,9 @@ func TestSubscriber_IgnoresInvalidJSON(t *testing.T) {
 		_ = sub.Start(ctx)
 	}()
 
-	_ = rdb.Publish(ctx, "test.channel", []byte("invalid-json"))
+	waitForSubscription(t, rdb, channel)
+
+	_ = rdb.Publish(ctx, channel, []byte("invalid-json"))
 
 	select {
 	case <-handler.seen:
@@ -216,6 +257,8 @@ func TestSubscriber_IgnoresOtherChannels(t *testing.T) {
 	go func() {
 		_ = sub.Start(ctx)
 	}()
+
+	waitForSubscription(t, rdb, "allowed.channel")
 
 	event := events.Message{
 		ID:   "id",
