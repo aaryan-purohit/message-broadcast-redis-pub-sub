@@ -2,12 +2,11 @@ package redisclient
 
 import (
 	"context"
-	"main/internal/testutils"
 	"testing"
 )
 
 func TestNew(t *testing.T) {
-	mr := testutils.SetupRedis(t)
+	mr := setupRedis(t)
 
 	// create client
 	client, err := New(mr.Addr(), 0)
@@ -38,7 +37,7 @@ func TestNew_InvalidAddress(t *testing.T) {
 }
 
 func TestNew_WithDifferentDB(t *testing.T) {
-	mr := testutils.SetupRedis(t)
+	mr := setupRedis(t)
 
 	// Test creating client with different DB numbers
 	for db := 0; db < 3; db++ {
@@ -60,7 +59,7 @@ func TestNew_WithDifferentDB(t *testing.T) {
 }
 
 func TestNew_ConnectionFunctional(t *testing.T) {
-	mr := testutils.SetupRedis(t)
+	mr := setupRedis(t)
 
 	client, err := New(mr.Addr(), 0)
 	if err != nil {

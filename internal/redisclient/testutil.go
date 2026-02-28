@@ -1,4 +1,4 @@
-package testutils
+package redisclient
 
 import (
 	"io"
@@ -8,11 +8,11 @@ import (
 	"github.com/alicebob/miniredis/v2"
 )
 
-func TestLogger() *slog.Logger {
+func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-func SetupRedis(t *testing.T) *miniredis.Miniredis {
+func setupRedis(t *testing.T) *miniredis.Miniredis {
 	mr, err := miniredis.Run()
 	if err != nil {
 		t.Fatalf("failed to start miniredis: %v", err)
