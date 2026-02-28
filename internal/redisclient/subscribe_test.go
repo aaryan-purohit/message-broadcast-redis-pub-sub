@@ -3,13 +3,10 @@ package redisclient
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
 	"main/internal/dispatcher"
@@ -17,60 +14,69 @@ import (
 	"main/internal/processor"
 )
 
-// fakeHandler captures submitted events
+// fakeHandler captures submitted events deterministically
 type fakeHandler struct {
 	mu     sync.Mutex
 	events []events.Message
+	seen   chan struct{}
+}
+
+func newFakeHandler() *fakeHandler {
+	return &fakeHandler{
+		seen: make(chan struct{}, 1),
+	}
 }
 
 func (f *fakeHandler) Handle(ctx context.Context, event events.Message) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
 	f.events = append(f.events, event)
+
+	// Non-blocking signal
+	select {
+	case f.seen <- struct{}{}:
+	default:
+	}
+
 	return nil
 }
 
-// newFakeProcessor creates a processor with a fake handler that captures events
-func newFakeProcessor(handler *fakeHandler) *processor.Processor {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	dispatcher := dispatcher.New(logger)
-	dispatcher.Register("demo.message", handler)
-	return processor.New(dispatcher, logger, 1, 10)
+func newFakeProcessor(t *testing.T, handler *fakeHandler) *processor.Processor {
+	t.Helper()
+
+	logger := testLogger()
+
+	d := dispatcher.New(logger)
+	d.Register("demo.message", handler)
+
+	return processor.New(d, logger, 1, 10)
 }
 
 func TestSubscriber_Start_ReceivesMessage(t *testing.T) {
-	// --- Setup Redis ---
-	mr, err := miniredis.Run()
-	if err != nil {
-		t.Fatalf("failed to start miniredis: %v", err)
-	}
-	defer mr.Close()
+	t.Parallel()
+
+	mr := setupRedis(t)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
+	defer rdb.Close()
 
-	// --- Setup Processor with fake handler ---
-	handler := &fakeHandler{}
-	proc := newFakeProcessor(handler)
+	handler := newFakeHandler()
+	proc := newFakeProcessor(t, handler)
 	defer proc.Stop()
 
-	// --- Subscriber ---
 	channel := "test.channel"
-	sub := NewSubscriber(rdb, channel, proc, slog.New(slog.NewTextHandler(os.Stdout, nil)))
+	sub := NewSubscriber(rdb, channel, proc, testLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// --- Start subscriber ---
 	go func() {
 		_ = sub.Start(ctx)
 	}()
 
-	// Give subscriber time to subscribe
-	time.Sleep(100 * time.Millisecond)
-
-	// --- Publish message ---
 	event := events.Message{
 		ID:     "test-id",
 		Type:   "demo.message",
@@ -80,43 +86,64 @@ func TestSubscriber_Start_ReceivesMessage(t *testing.T) {
 		},
 	}
 
-	data, _ := json.Marshal(event)
-	err = rdb.Publish(ctx, channel, data).Err()
+	data, err := json.Marshal(event)
 	if err != nil {
+		t.Fatalf("failed to marshal event: %v", err)
+	}
+
+	if err := rdb.Publish(ctx, channel, data).Err(); err != nil {
 		t.Fatalf("failed to publish message: %v", err)
 	}
 
-	// --- Assert ---
-	time.Sleep(200 * time.Millisecond)
+	select {
+	case <-handler.seen:
+		// success
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for event")
+	}
 
 	handler.mu.Lock()
-	count := len(handler.events)
-	handler.mu.Unlock()
+	defer handler.mu.Unlock()
 
-	if count != 1 {
-		t.Fatalf("expected 1 event, got %d", count)
+	if len(handler.events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(handler.events))
+	}
+
+	received := handler.events[0]
+
+	if received.ID != "test-id" {
+		t.Fatalf("unexpected ID: %s", received.ID)
+	}
+	if received.Type != "demo.message" {
+		t.Fatalf("unexpected type: %s", received.Type)
+	}
+	payload, ok := received.Payload.(map[string]any)
+	if !ok {
+		t.Fatalf("payload has unexpected type: %T", received.Payload)
+	}
+
+	if payload["text"] != "hello" {
+		t.Fatalf("unexpected payload value: %#v", payload)
 	}
 }
 
 func TestSubscriber_Start_ContextCancel(t *testing.T) {
-	mr, err := miniredis.Run()
-	if err != nil {
-		t.Fatalf("failed to start miniredis: %v", err)
-	}
-	defer mr.Close()
+	t.Parallel()
+
+	mr := setupRedis(t)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
 	defer rdb.Close()
 
-	handler := &fakeHandler{}
-	proc := newFakeProcessor(handler)
+	handler := newFakeHandler()
+	proc := newFakeProcessor(t, handler)
 	defer proc.Stop()
 
-	sub := NewSubscriber(rdb, "test.channel", proc, slog.New(slog.NewTextHandler(os.Stdout, nil)))
+	sub := NewSubscriber(rdb, "test.channel", proc, testLogger())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
 
 	done := make(chan struct{})
@@ -128,8 +155,81 @@ func TestSubscriber_Start_ContextCancel(t *testing.T) {
 
 	select {
 	case <-done:
-		// success - context timeout or cancellation was handled
+		// success
 	case <-time.After(2 * time.Second):
-		t.Fatal("subscriber did not stop after context timeout")
+		t.Fatal("subscriber did not stop after context cancellation")
+	}
+}
+
+func TestSubscriber_IgnoresInvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	mr := setupRedis(t)
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+	defer rdb.Close()
+
+	handler := newFakeHandler()
+	proc := newFakeProcessor(t, handler)
+	defer proc.Stop()
+
+	sub := NewSubscriber(rdb, "test.channel", proc, testLogger())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = sub.Start(ctx)
+	}()
+
+	_ = rdb.Publish(ctx, "test.channel", []byte("invalid-json"))
+
+	select {
+	case <-handler.seen:
+		t.Fatal("handler should not receive invalid JSON")
+	case <-time.After(300 * time.Millisecond):
+		// success
+	}
+}
+
+func TestSubscriber_IgnoresOtherChannels(t *testing.T) {
+	t.Parallel()
+
+	mr := setupRedis(t)
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+	defer rdb.Close()
+
+	handler := newFakeHandler()
+	proc := newFakeProcessor(t, handler)
+	defer proc.Stop()
+
+	sub := NewSubscriber(rdb, "allowed.channel", proc, testLogger())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		_ = sub.Start(ctx)
+	}()
+
+	event := events.Message{
+		ID:   "id",
+		Type: "demo.message",
+	}
+
+	data, _ := json.Marshal(event)
+
+	_ = rdb.Publish(ctx, "other.channel", data)
+
+	select {
+	case <-handler.seen:
+		t.Fatal("handler should not receive events from other channels")
+	case <-time.After(300 * time.Millisecond):
+		// success
 	}
 }

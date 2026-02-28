@@ -3,16 +3,10 @@ package redisclient
 import (
 	"context"
 	"testing"
-
-	"github.com/alicebob/miniredis/v2"
 )
 
 func TestNew(t *testing.T) {
-	mr, err := miniredis.Run()
-	if err != nil {
-		t.Fatalf("failed to start miniredis: %v", err)
-	}
-	defer mr.Close()
+	mr := setupRedis(t)
 
 	// create client
 	client, err := New(mr.Addr(), 0)
@@ -43,11 +37,7 @@ func TestNew_InvalidAddress(t *testing.T) {
 }
 
 func TestNew_WithDifferentDB(t *testing.T) {
-	mr, err := miniredis.Run()
-	if err != nil {
-		t.Fatalf("failed to start miniredis: %v", err)
-	}
-	defer mr.Close()
+	mr := setupRedis(t)
 
 	// Test creating client with different DB numbers
 	for db := 0; db < 3; db++ {
@@ -69,11 +59,7 @@ func TestNew_WithDifferentDB(t *testing.T) {
 }
 
 func TestNew_ConnectionFunctional(t *testing.T) {
-	mr, err := miniredis.Run()
-	if err != nil {
-		t.Fatalf("failed to start miniredis: %v", err)
-	}
-	defer mr.Close()
+	mr := setupRedis(t)
 
 	client, err := New(mr.Addr(), 0)
 	if err != nil {
