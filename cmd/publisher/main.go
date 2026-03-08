@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"main/internal/events"
-	"main/internal/redisclient"
 	"os"
 	"time"
+
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/events"
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/redisclient"
 
 	"github.com/google/uuid"
 )

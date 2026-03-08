@@ -203,7 +203,7 @@ package handlers
 import (
     "context"
     "log/slog"
-    "main/internal/events"
+    "github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/events"
 )
 
 type MyEventHandler struct {

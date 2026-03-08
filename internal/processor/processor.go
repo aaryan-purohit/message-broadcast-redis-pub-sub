@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"main/internal/dispatcher"
-	"main/internal/events"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/dispatcher"
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/events"
 )
 
 var (
@@ -105,12 +106,12 @@ func (p *Processor) processWithRetry(event events.Message) {
 			}
 		}
 
-		p.dispatcher.Dispatch(p.ctx, event)
-		if ctx := p.ctx; ctx.Err() == nil {
+		err := p.dispatcher.Dispatch(p.ctx, event)
+		if err == nil {
 			return
 		}
 		if attempt < p.maxRetries {
-			p.logger.Warn("dispatch failed, retrying", "event_id", event.ID, "attempt", attempt+1, "max_retries", p.maxRetries)
+			p.logger.Warn("dispatch failed, retrying", "event_id", event.ID, "error", err, "attempt", attempt+1, "max_retries", p.maxRetries)
 		}
 	}
 	p.logger.Error("dispatch failed after retries", "event_id", event.ID, "max_retries", p.maxRetries)
