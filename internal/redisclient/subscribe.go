@@ -28,7 +28,11 @@ func NewSubscriber(client *redis.Client, channel string, processor *processor.Pr
 
 func (s *Subscriber) Start(ctx context.Context) error {
 	sub := s.client.Subscribe(ctx, s.channel)
-	defer sub.Close()
+	defer func() {
+		if err := sub.Close(); err != nil {
+			s.logger.Error("failed to close subscription", "error", err)
+		}
+	}()
 
 	s.logger.Info("subscribed to redis", "channel", s.channel)
 
