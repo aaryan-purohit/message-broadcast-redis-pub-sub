@@ -53,6 +53,38 @@ func newFakeProcessor(t *testing.T, handler *fakeHandler) *processor.Processor {
 	return processor.New(d, logger, 1, 10)
 }
 
+func TestNewSubscriber(t *testing.T) {
+	mr := SetupRedis(t)
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+	defer rdb.Close()
+
+	channel := "test.channel"
+	logger := TestLogger()
+
+	proc := &processor.Processor{}
+
+	sub := NewSubscriber(rdb, channel, proc, logger)
+
+	if sub == nil {
+		t.Fatal("expected non-nil subscriber")
+	}
+	if sub.client != rdb {
+		t.Fatal("subscriber has incorrect Redis client")
+	}
+	if sub.channel != channel {
+		t.Fatalf("expected channel %q, got %q", channel, sub.channel)
+	}
+	if sub.logger != logger {
+		t.Fatal("subscriber has incorrect logger")
+	}
+	if sub.processor != proc {
+		t.Fatal("subscriber has incorrect processor")
+	}
+}
+
 // waitForSubscription blocks until Redis confirms a subscriber
 func waitForSubscription(
 	t *testing.T,
