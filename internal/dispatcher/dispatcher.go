@@ -3,8 +3,9 @@ package dispatcher
 import (
 	"context"
 	"log/slog"
-	"main/internal/events"
 	"sync"
+
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/events"
 )
 
 type Handler interface {
@@ -31,17 +32,19 @@ func (d *Dispatcher) Register(eventType string, handler Handler) {
 	d.logger.Info("handler registered", "event_type", eventType)
 }
 
-func (d *Dispatcher) Dispatch(ctx context.Context, event events.Message) {
+func (d *Dispatcher) Dispatch(ctx context.Context, event events.Message) error {
 	d.mu.RLock()
 	handler, ok := d.handlers[event.Type]
 	d.mu.RUnlock()
 
 	if !ok {
 		d.logger.Warn("no handler found", "event_type", event.Type)
-		return
+		return nil // nothing to do
 	}
 
 	if err := handler.Handle(ctx, event); err != nil {
 		d.logger.Error("handler failed", "event_type", event.Type, "error", err)
+		return err
 	}
+	return nil
 }

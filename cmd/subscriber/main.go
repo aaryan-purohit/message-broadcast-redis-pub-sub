@@ -8,10 +8,10 @@ import (
 
 	"log/slog"
 
-	"main/internal/dispatcher"
-	"main/internal/handlers"
-	"main/internal/processor"
-	"main/internal/redisclient"
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/dispatcher"
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/handlers"
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/processor"
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/redisclient"
 )
 
 func main() {

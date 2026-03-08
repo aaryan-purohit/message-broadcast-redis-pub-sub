@@ -65,8 +65,17 @@ jobs:
       - name: Go vet
         run: go vet ./...
 
-      - name: Run Go tests with coverage
-        run: go test ./... -v -race -coverprofile=coverage.out -covermode=atomic
+      - name: Run Go tests with coverage and enforce thresholds
+        run: |
+          go test ./... -v -race -coverprofile=coverage.out -covermode=atomic 2>&1 | tee test.log
+          # fail if any package has no tests
+          # if grep -q "\[no test files\]" test.log; then
+          #   echo "error: one or more packages contain no test files" && exit 1
+          # fi
+          # compute total coverage and enforce minimum
+          coverage=$(go tool cover -func=coverage.out | awk '/total:/ {print substr($3,1,length($3)-1)}')
+          echo "total coverage: ${coverage}%"
+          awk -v cov="$coverage" 'BEGIN { if (cov < 75) { print "coverage below 75%"; exit 1 } }'
 
       - name: Display coverage summary
         run: go tool cover -func=coverage.out | tail -20

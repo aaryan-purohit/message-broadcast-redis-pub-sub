@@ -3,9 +3,11 @@ package redisclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
-	"main/internal/events"
-	"main/internal/processor"
+
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/events"
+	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/processor"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -28,13 +30,21 @@ func NewSubscriber(client *redis.Client, channel string, processor *processor.Pr
 
 func (s *Subscriber) Start(ctx context.Context) error {
 	sub := s.client.Subscribe(ctx, s.channel)
-	defer sub.Close()
+	defer func() {
+		if err := sub.Close(); err != nil {
+			s.logger.Error("failed to close subscription", "error", err)
+		}
+	}()
 
 	s.logger.Info("subscribed to redis", "channel", s.channel)
 
 	for {
 		msg, err := sub.ReceiveMessage(ctx)
 		if err != nil {
+			// if context was cancelled, exit cleanly
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
 			return err
 		}
 
