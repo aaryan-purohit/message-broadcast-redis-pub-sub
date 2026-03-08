@@ -3,6 +3,7 @@ package redisclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 
 	"github.com/aaryan-purohit/message-broadcast-redis-pub-sub/internal/events"
