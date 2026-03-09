@@ -22,9 +22,17 @@ func TestNewClient(t *testing.T) {
 		t.Fatal("Expected a valid Redis client, got nil")
 	}
 
-	// Test with invalid Redis server
-	_, err = New("invalid:6379", 0)
+}
+
+func TestNewClientInvalidAddress(t *testing.T) {
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("Failed to start miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	_, err = New("invalid:address", 0)
 	if err == nil {
-		t.Fatal("Expected an error for invalid Redis server, got nil")
+		t.Fatal("Expected an error for invalid address, got nil")
 	}
 }
