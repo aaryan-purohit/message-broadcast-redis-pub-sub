@@ -49,11 +49,18 @@ func New(dispatcher *dispatcher.Dispatcher, logger *slog.Logger, workers int, bu
 }
 
 func (p *Processor) Submit(event events.Message) error {
+	// if context has been cancelled we should not try to send on the channel
+	select {
+	case <-p.ctx.Done():
+		// the queue may have been closed already by Stop, so avoid sending
+		return p.ctx.Err()
+	default:
+	}
+
+	// try to enqueue without blocking; if the buffer is full we drop
 	select {
 	case p.queue <- event:
 		return nil
-	case <-p.ctx.Done():
-		return p.ctx.Err()
 	default:
 		p.dropped.Add(1)
 		p.logger.Warn("message dropped, queue full", "event_id", event.ID, "total_dropped", p.dropped.Load())
